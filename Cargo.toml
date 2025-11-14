@@ -1,0 +1,12 @@
+[package]
+name = "syft-buildpack"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+flate2 = "1.1.4"
+libcnb = "0.30.0"
+reqwest = { version = "0.12.24", features = ["blocking"] }
+serde = "1.0.228"
+tar = "0.4.44"
+thiserror = "2.0.17"
