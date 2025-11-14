@@ -9,21 +9,10 @@ use libcnb::{buildpack_main, Buildpack};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
+mod errors;
+use crate::errors::SyftBuildpackError;
+
 const SYFT_VERSION: &str = "1.34.2";
-
-#[derive(thiserror::Error, Debug)]
-pub enum SyftBuildpackError {
-    #[error("HTTP error: {0}")]
-    Reqwest(reqwest::Error),
-    #[error("IO error: {0}")]
-    Io(std::io::Error),
-}
-
-impl From<SyftBuildpackError> for libcnb::Error<SyftBuildpackError> {
-    fn from(e: SyftBuildpackError) -> Self {
-        libcnb::Error::BuildpackError(e)
-    }
-}
 
 pub(crate) struct SyftBuildpack;
 
