@@ -49,7 +49,9 @@ pub(crate) fn handle(
             for entry in archive.entries().map_err(SyftBuildpackError::Io)? {
                 let mut entry = entry.map_err(SyftBuildpackError::Io)?;
                 if entry.path().unwrap().ends_with("syft") {
-                    let syft_path = layer_ref.path().join("syft");
+                    let bin_path = layer_ref.path().join("bin");
+                    fs::create_dir(&bin_path).map_err(SyftBuildpackError::Io)?;
+                    let syft_path = bin_path.join("syft");
                     entry.unpack(&syft_path).unwrap();
                     let mut perms = fs::metadata(&syft_path)
                         .map_err(SyftBuildpackError::Io)?
