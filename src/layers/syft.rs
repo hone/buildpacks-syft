@@ -1,9 +1,10 @@
 use libcnb::{
     build::BuildContext,
-    data::layer_name,
+    data::{layer_name, sbom::SbomFormat},
     layer::{
         CachedLayerDefinition, InvalidMetadataAction, LayerRef, LayerState, RestoredLayerAction,
     },
+    sbom::Sbom,
 };
 
 use std::{fs, os::unix::fs::PermissionsExt};
@@ -11,6 +12,7 @@ use std::{fs, os::unix::fs::PermissionsExt};
 use crate::{errors::SyftBuildpackError, SyftBuildpack};
 
 const SYFT_VERSION: &str = "1.34.2";
+const SYFT_ARCH: &str = "amd64";
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub(crate) struct SyftLayerMetadata {
@@ -35,8 +37,8 @@ pub(crate) fn handle(
             println!("---> Downloading Syft v{}", SYFT_VERSION);
 
             let syft_url = format!(
-                "https://github.com/anchore/syft/releases/download/v{}/syft_{}_linux_amd64.tar.gz",
-                SYFT_VERSION, SYFT_VERSION
+                "https://github.com/anchore/syft/releases/download/v{}/syft_{}_linux_{}.tar.gz",
+                SYFT_VERSION, SYFT_VERSION, SYFT_ARCH
             );
 
             let response =
@@ -69,5 +71,57 @@ pub(crate) fn handle(
         LayerState::Restored { .. } => {}
     }
 
+    write_sbom(&layer_ref)?;
+
     Ok(layer_ref)
+}
+
+fn write_sbom(
+    layer_ref: &LayerRef<SyftBuildpack, (), ()>,
+) -> libcnb::Result<(), SyftBuildpackError> {
+    let syft_sbom_url = format!(
+        "https://github.com/anchore/syft/releases/download/v{}/syft_{}_linux_{}.sbom",
+        SYFT_VERSION, SYFT_VERSION, SYFT_ARCH
+    );
+    let mut response =
+        reqwest::blocking::get(&syft_sbom_url).map_err(SyftBuildpackError::Reqwest)?;
+
+    let tmpdir = tempfile::tempdir().map_err(SyftBuildpackError::Io)?;
+    let syft_sbom = tmpdir.path().join("syft.sbom.syft.json");
+    let mut syft_sbom_file = fs::File::create(&syft_sbom).map_err(SyftBuildpackError::Io)?;
+    response
+        .copy_to(&mut syft_sbom_file)
+        .map_err(SyftBuildpackError::Reqwest)?;
+
+    let sboms = [SbomFormat::CycloneDxJson, SbomFormat::SpdxJson]
+        .into_iter()
+        .map(|format| {
+            let file = if format == SbomFormat::CycloneDxJson {
+                tmpdir.path().join("syft.sbom.cdx.json")
+            } else {
+                tmpdir.path().join("syft.sbom.spdx.json")
+            };
+            let o_option = if format == SbomFormat::CycloneDxJson {
+                format!("cyclonedx-json={}", file.display())
+            } else {
+                format!("spdx-json={}", file.display())
+            };
+            std::process::Command::new(layer_ref.path().join("bin/syft"))
+                .arg("convert")
+                .arg(&syft_sbom)
+                .arg("-o")
+                .arg(o_option)
+                .output()
+                .map_err(SyftBuildpackError::Io)?;
+
+            Ok(Sbom {
+                format: format,
+                data: fs::read(&file).map_err(SyftBuildpackError::Io)?,
+            })
+        })
+        .collect::<Result<Vec<Sbom>, SyftBuildpackError>>()?;
+
+    layer_ref.write_sboms(&sboms)?;
+
+    Ok(())
 }
