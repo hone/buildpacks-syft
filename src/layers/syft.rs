@@ -93,7 +93,7 @@ fn download_syft(
     let checksum = sha2::Sha256::digest(&tar_gz);
     if checksum.to_vec() != artifact.checksum.value {
         println!("---> syft artifact checksum did not match");
-        return Err(SyftBuildpackError::ChecksumMismatch)?;
+        Err(SyftBuildpackError::ChecksumMismatch)?;
     }
 
     let tar = flate2::read::GzDecoder::new(&tar_gz[..]);
@@ -159,7 +159,7 @@ fn write_sbom(
                 .map_err(SyftBuildpackError::Io)?;
 
             Ok(Sbom {
-                format: format,
+                format,
                 data: fs::read(&file).map_err(SyftBuildpackError::Io)?,
             })
         })
