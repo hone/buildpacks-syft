@@ -95,7 +95,7 @@ fn download_syft(
     let checksum = sha2::Sha256::digest(&tar_gz);
     if checksum.to_vec() != artifact.checksum.value {
         println!("---> syft artifact checksum did not match");
-        return Err(SyftBuildpackError::ChecksumMismatch)?;
+        Err(SyftBuildpackError::ChecksumMismatch)?;
     }
 
     let tar = flate2::read::GzDecoder::new(&tar_gz[..]);
@@ -143,7 +143,7 @@ fn write_sbom(
     let checksum = sha2::Sha256::digest(&bytes);
     if checksum.to_vec() != sbom_artifact.checksum.value {
         println!("---> sbom checksum did not match");
-        return Err(SyftBuildpackError::ChecksumMismatch)?;
+        Err(SyftBuildpackError::ChecksumMismatch)?;
     }
 
     let tmpdir = tempfile::tempdir().map_err(SyftBuildpackError::Io)?;
@@ -175,7 +175,7 @@ fn write_sbom(
                 .map_err(SyftBuildpackError::Io)?;
 
             Ok(Sbom {
-                format: format,
+                format,
                 data: fs::read(&file).map_err(SyftBuildpackError::Io)?,
             })
         })
