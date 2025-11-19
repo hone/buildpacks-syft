@@ -13,7 +13,7 @@ use libherokubuildpack::inventory::{
 use semver::{Version, VersionReq};
 use sha2::{Digest, Sha256};
 
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::fs;
 
 use crate::{errors::SyftBuildpackError, SyftBuildpack};
 
@@ -92,11 +92,6 @@ fn download_syft(
             fs::create_dir(&bin_path).map_err(SyftBuildpackError::Io)?;
             let syft_path = bin_path.join("syft");
             entry.unpack(&syft_path).unwrap();
-            let mut perms = fs::metadata(&syft_path)
-                .map_err(SyftBuildpackError::Io)?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&syft_path, perms).map_err(SyftBuildpackError::Io)?;
             break;
         }
     }
