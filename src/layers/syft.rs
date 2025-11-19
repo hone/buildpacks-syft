@@ -13,7 +13,7 @@ use libherokubuildpack::inventory::{
 use semver::{Version, VersionReq};
 use sha2::{Digest, Sha256};
 
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::{fs, io::Write, os::unix::fs::PermissionsExt};
 
 use crate::{errors::SyftBuildpackError, SyftBuildpack};
 
@@ -136,15 +136,22 @@ fn write_sbom(
     let sbom_artifact = inventory
         .resolve(syft_artifact.os, syft_artifact.arch, &version_req)
         .ok_or(SyftBuildpackError::NoValidArtifacts)?;
-    let mut response =
+    let response =
         reqwest::blocking::get(&sbom_artifact.url).map_err(SyftBuildpackError::Reqwest)?;
+    let bytes = response.bytes().map_err(SyftBuildpackError::Reqwest)?;
+
+    let checksum = sha2::Sha256::digest(&bytes);
+    if checksum.to_vec() != sbom_artifact.checksum.value {
+        println!("---> sbom checksum did not match");
+        return Err(SyftBuildpackError::ChecksumMismatch)?;
+    }
 
     let tmpdir = tempfile::tempdir().map_err(SyftBuildpackError::Io)?;
     let syft_sbom = tmpdir.path().join("syft.sbom.syft.json");
-    let mut syft_sbom_file = fs::File::create(&syft_sbom).map_err(SyftBuildpackError::Io)?;
-    response
-        .copy_to(&mut syft_sbom_file)
-        .map_err(SyftBuildpackError::Reqwest)?;
+    fs::File::create(&syft_sbom)
+        .map_err(SyftBuildpackError::Io)?
+        .write(&bytes)
+        .map_err(SyftBuildpackError::Io)?;
 
     let mut sboms = [SbomFormat::CycloneDxJson, SbomFormat::SpdxJson]
         .into_iter()
