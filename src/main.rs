@@ -1,6 +1,6 @@
 use libcnb::build::{BuildContext, BuildResult, BuildResultBuilder};
 use libcnb::generic::{GenericMetadata, GenericPlatform};
-use libcnb::{buildpack_main, Buildpack};
+use libcnb::{Buildpack, buildpack_main};
 
 mod errors;
 mod layers;
