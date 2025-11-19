@@ -10,6 +10,8 @@ pub enum SyftBuildpackError {
     NoValidArtifacts,
     #[error("Checksum mismatch")]
     ChecksumMismatch,
+    #[error("SBOM checksum mismatch")]
+    SbomChecksumMismatch,
 }
 
 impl From<SyftBuildpackError> for libcnb::Error<SyftBuildpackError> {
