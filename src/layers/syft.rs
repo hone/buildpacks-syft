@@ -7,15 +7,15 @@ use libcnb::{
     sbom::Sbom,
 };
 use libherokubuildpack::inventory::{
-    artifact::{Arch, Artifact, Os},
     Inventory,
+    artifact::{Arch, Artifact, Os},
 };
 use semver::{Version, VersionReq};
 use sha2::{Digest, Sha256};
 
 use std::fs;
 
-use crate::{errors::SyftBuildpackError, SyftBuildpack};
+use crate::{SyftBuildpack, errors::SyftBuildpackError};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub(crate) struct SyftLayerMetadata {
