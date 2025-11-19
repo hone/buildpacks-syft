@@ -25,23 +25,31 @@ pub(crate) struct SyftLayerMetadata {
 pub(crate) fn handle(
     context: &BuildContext<SyftBuildpack>,
 ) -> libcnb::Result<LayerRef<SyftBuildpack, (), ()>, SyftBuildpackError> {
+    let artifact = detect_version()?;
+
     let layer_ref = context.cached_layer(
         layer_name!("syft"),
         CachedLayerDefinition {
             build: true,
             launch: false,
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
-            restored_layer_action: &|_: &SyftLayerMetadata, _| RestoredLayerAction::KeepLayer,
+            restored_layer_action: &|metadata: &SyftLayerMetadata, _| {
+                if metadata.version == artifact.version {
+                    RestoredLayerAction::KeepLayer
+                } else {
+                    RestoredLayerAction::DeleteLayer
+                }
+            },
         },
     )?;
-
-    let artifact = detect_version()?;
 
     match layer_ref.state {
         LayerState::Empty { .. } => {
             download_syft(&layer_ref, &artifact)?;
         }
-        LayerState::Restored { .. } => {}
+        LayerState::Restored { .. } => {
+            println!("---> Restored Syft v{}", artifact.version);
+        }
     }
 
     write_sbom(&layer_ref, &artifact)?;
