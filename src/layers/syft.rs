@@ -25,12 +25,12 @@ struct SyftLayerMetadata {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct SyftArtifactMetadata {
-    sbom: SyftSbom,
+struct ArtifactSbomMetadata {
+    sbom: SbomMetadata,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct SyftSbom {
+struct SbomMetadata {
     url: String,
     checksum: Checksum<Sha256>,
 }
@@ -63,9 +63,9 @@ pub(crate) fn handle(
 }
 
 fn detect_version()
--> libcnb::Result<Artifact<Version, Sha256, SyftArtifactMetadata>, SyftBuildpackError> {
+-> libcnb::Result<Artifact<Version, Sha256, ArtifactSbomMetadata>, SyftBuildpackError> {
     let inventory = include_str!("../../inventories/packages.toml")
-        .parse::<Inventory<Version, Sha256, SyftArtifactMetadata>>()
+        .parse::<Inventory<Version, Sha256, ArtifactSbomMetadata>>()
         .map_err(SyftBuildpackError::ParseInventoryError)?;
 
     let os = std::env::consts::OS
@@ -83,7 +83,7 @@ fn detect_version()
 
 fn download_syft(
     layer_ref: &LayerRef<SyftBuildpack, (), ()>,
-    artifact: &Artifact<Version, Sha256, SyftArtifactMetadata>,
+    artifact: &Artifact<Version, Sha256, ArtifactSbomMetadata>,
 ) -> libcnb::Result<(), SyftBuildpackError> {
     println!("---> Downloading Syft v{}", artifact.version);
 
@@ -119,7 +119,7 @@ fn download_syft(
 
 fn write_sbom(
     layer_ref: &LayerRef<SyftBuildpack, (), ()>,
-    syft_artifact: &Artifact<Version, Sha256, SyftArtifactMetadata>,
+    syft_artifact: &Artifact<Version, Sha256, ArtifactSbomMetadata>,
 ) -> libcnb::Result<(), SyftBuildpackError> {
     let response = reqwest::blocking::get(&syft_artifact.metadata.sbom.url)
         .map_err(SyftBuildpackError::Reqwest)?;
