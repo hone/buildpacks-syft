@@ -20,7 +20,7 @@ use std::{fs, io::Write};
 use crate::{SyftBuildpack, errors::SyftBuildpackError};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-pub(crate) struct SyftLayerMetadata {
+struct SyftLayerMetadata {
     version: Version,
 }
 
@@ -32,7 +32,7 @@ struct SyftArtifactMetadata {
 #[derive(Clone, Serialize, Deserialize)]
 struct SyftSbom {
     url: String,
-    pub checksum: Checksum<Sha256>,
+    checksum: Checksum<Sha256>,
 }
 
 pub(crate) fn handle(
