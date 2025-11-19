@@ -57,17 +57,9 @@ fn detect_version() -> libcnb::Result<Artifact<Version, Sha256, Option<()>>, Syf
     let os = std::env::consts::OS
         .parse::<Os>()
         .expect("OS should always parse.");
-    let arch = if std::env::consts::ARCH == "x86_64" {
-        Ok(Arch::Amd64)
-    } else if std::env::consts::ARCH == "aarch64" {
-        Ok(Arch::Arm64)
-    } else {
-        Err(format!(
-            "Unsupported Architecture: {}",
-            std::env::consts::ARCH
-        ))
-    }
-    .expect("ARCH should always parse.");
+    let arch = std::env::consts::ARCH
+        .parse::<Arch>()
+        .expect("ARCH should always parse.");
 
     Ok(inventory
         .resolve(os, arch, &semver::VersionReq::STAR)
