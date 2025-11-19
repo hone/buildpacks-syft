@@ -5,4 +5,4 @@ id = "hone/syft"
 version = "0.1.0"
 name = "Syft"
 
-sbom-formats = ["application/vnd.cyclonedx+json", "application/spdx+json"]
+sbom-formats = ["application/vnd.cyclonedx+json", "application/spdx+json", "application/vnd.syft+json"]

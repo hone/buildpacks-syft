@@ -7,18 +7,15 @@ use libcnb::{
     sbom::Sbom,
 };
 use libherokubuildpack::inventory::{
-    artifact::{Arch, Os},
+    artifact::{Arch, Artifact, Os},
     Inventory,
 };
-use semver::Version;
+use semver::{Version, VersionReq};
 use sha2::{Digest, Sha256};
 
 use std::{fs, os::unix::fs::PermissionsExt};
 
 use crate::{errors::SyftBuildpackError, SyftBuildpack};
-
-const SYFT_VERSION: &str = "1.34.2";
-const SYFT_ARCH: &str = "amd64";
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub(crate) struct SyftLayerMetadata {
@@ -38,84 +35,101 @@ pub(crate) fn handle(
         },
     )?;
 
+    let artifact = detect_version()?;
+
     match layer_ref.state {
         LayerState::Empty { .. } => {
-            println!("---> Downloading Syft v{}", SYFT_VERSION);
-
-            let inventory = include_str!("../../inventories/packages.toml")
-                .parse::<Inventory<Version, Sha256, Option<()>>>()
-                .map_err(SyftBuildpackError::ParseInventoryError)?;
-
-            let os = std::env::consts::OS
-                .parse::<Os>()
-                .expect("OS should always parse.");
-            let arch = if std::env::consts::ARCH == "x86_64" {
-                Ok(Arch::Amd64)
-            } else if std::env::consts::ARCH == "aarch64" {
-                Ok(Arch::Arm64)
-            } else {
-                Err(format!(
-                    "Unsupported Architecture: {}",
-                    std::env::consts::ARCH
-                ))
-            }
-            .expect("ARCH should always parse.");
-
-            let artifact = inventory
-                .resolve(os, arch, &semver::VersionReq::STAR)
-                .ok_or(SyftBuildpackError::NoValidArtifacts)?;
-
-            let response =
-                reqwest::blocking::get(&artifact.url).map_err(SyftBuildpackError::Reqwest)?;
-            let tar_gz = response.bytes().map_err(SyftBuildpackError::Reqwest)?;
-
-            let checksum = sha2::Sha256::digest(&tar_gz);
-            if checksum.to_vec() != artifact.checksum.value {
-                println!("---> syft artifact checksum did not match");
-                return Err(SyftBuildpackError::ChecksumMismatch)?;
-            }
-
-            let tar = flate2::read::GzDecoder::new(&tar_gz[..]);
-            let mut archive = tar::Archive::new(tar);
-
-            println!("---> Extracting Syft to {}", layer_ref.path().display());
-            for entry in archive.entries().map_err(SyftBuildpackError::Io)? {
-                let mut entry = entry.map_err(SyftBuildpackError::Io)?;
-                if entry.path().unwrap().ends_with("syft") {
-                    let bin_path = layer_ref.path().join("bin");
-                    fs::create_dir(&bin_path).map_err(SyftBuildpackError::Io)?;
-                    let syft_path = bin_path.join("syft");
-                    entry.unpack(&syft_path).unwrap();
-                    let mut perms = fs::metadata(&syft_path)
-                        .map_err(SyftBuildpackError::Io)?
-                        .permissions();
-                    perms.set_mode(0o755);
-                    fs::set_permissions(&syft_path, perms).map_err(SyftBuildpackError::Io)?;
-                    break;
-                }
-            }
-
-            layer_ref.write_metadata(SyftLayerMetadata {
-                version: Version::parse(SYFT_VERSION).map_err(SyftBuildpackError::Semver)?,
-            })?;
+            download_syft(&layer_ref, &artifact)?;
         }
         LayerState::Restored { .. } => {}
     }
 
-    write_sbom(&layer_ref)?;
+    write_sbom(&layer_ref, &artifact)?;
 
     Ok(layer_ref)
 }
 
+fn detect_version() -> libcnb::Result<Artifact<Version, Sha256, Option<()>>, SyftBuildpackError> {
+    let inventory = include_str!("../../inventories/packages.toml")
+        .parse::<Inventory<Version, Sha256, Option<()>>>()
+        .map_err(SyftBuildpackError::ParseInventoryError)?;
+
+    let os = std::env::consts::OS
+        .parse::<Os>()
+        .expect("OS should always parse.");
+    let arch = if std::env::consts::ARCH == "x86_64" {
+        Ok(Arch::Amd64)
+    } else if std::env::consts::ARCH == "aarch64" {
+        Ok(Arch::Arm64)
+    } else {
+        Err(format!(
+            "Unsupported Architecture: {}",
+            std::env::consts::ARCH
+        ))
+    }
+    .expect("ARCH should always parse.");
+
+    Ok(inventory
+        .resolve(os, arch, &semver::VersionReq::STAR)
+        .ok_or(SyftBuildpackError::NoValidArtifacts)?
+        .clone())
+}
+
+fn download_syft(
+    layer_ref: &LayerRef<SyftBuildpack, (), ()>,
+    artifact: &Artifact<Version, Sha256, Option<()>>,
+) -> libcnb::Result<(), SyftBuildpackError> {
+    println!("---> Downloading Syft v{}", artifact.version);
+
+    let response = reqwest::blocking::get(&artifact.url).map_err(SyftBuildpackError::Reqwest)?;
+    let tar_gz = response.bytes().map_err(SyftBuildpackError::Reqwest)?;
+
+    let checksum = sha2::Sha256::digest(&tar_gz);
+    if checksum.to_vec() != artifact.checksum.value {
+        println!("---> syft artifact checksum did not match");
+        return Err(SyftBuildpackError::ChecksumMismatch)?;
+    }
+
+    let tar = flate2::read::GzDecoder::new(&tar_gz[..]);
+    let mut archive = tar::Archive::new(tar);
+
+    for entry in archive.entries().map_err(SyftBuildpackError::Io)? {
+        let mut entry = entry.map_err(SyftBuildpackError::Io)?;
+        if entry.path().unwrap().ends_with("syft") {
+            let bin_path = layer_ref.path().join("bin");
+            fs::create_dir(&bin_path).map_err(SyftBuildpackError::Io)?;
+            let syft_path = bin_path.join("syft");
+            entry.unpack(&syft_path).unwrap();
+            let mut perms = fs::metadata(&syft_path)
+                .map_err(SyftBuildpackError::Io)?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&syft_path, perms).map_err(SyftBuildpackError::Io)?;
+            break;
+        }
+    }
+
+    layer_ref.write_metadata(SyftLayerMetadata {
+        version: artifact.version.clone(),
+    })?;
+
+    Ok(())
+}
+
 fn write_sbom(
     layer_ref: &LayerRef<SyftBuildpack, (), ()>,
+    syft_artifact: &Artifact<Version, Sha256, Option<()>>,
 ) -> libcnb::Result<(), SyftBuildpackError> {
-    let syft_sbom_url = format!(
-        "https://github.com/anchore/syft/releases/download/v{}/syft_{}_linux_{}.sbom",
-        SYFT_VERSION, SYFT_VERSION, SYFT_ARCH
-    );
+    let inventory = include_str!("../../inventories/sboms.toml")
+        .parse::<Inventory<Version, Sha256, Option<()>>>()
+        .map_err(SyftBuildpackError::ParseInventoryError)?;
+    let version_req = VersionReq::parse(format!("={}", syft_artifact.version).as_str())
+        .expect("Failed to parse version requirement from exact version string");
+    let sbom_artifact = inventory
+        .resolve(syft_artifact.os, syft_artifact.arch, &version_req)
+        .ok_or(SyftBuildpackError::NoValidArtifacts)?;
     let mut response =
-        reqwest::blocking::get(&syft_sbom_url).map_err(SyftBuildpackError::Reqwest)?;
+        reqwest::blocking::get(&sbom_artifact.url).map_err(SyftBuildpackError::Reqwest)?;
 
     let tmpdir = tempfile::tempdir().map_err(SyftBuildpackError::Io)?;
     let syft_sbom = tmpdir.path().join("syft.sbom.syft.json");
@@ -124,7 +138,7 @@ fn write_sbom(
         .copy_to(&mut syft_sbom_file)
         .map_err(SyftBuildpackError::Reqwest)?;
 
-    let sboms = [SbomFormat::CycloneDxJson, SbomFormat::SpdxJson]
+    let mut sboms = [SbomFormat::CycloneDxJson, SbomFormat::SpdxJson]
         .into_iter()
         .map(|format| {
             let file = if format == SbomFormat::CycloneDxJson {
@@ -151,6 +165,10 @@ fn write_sbom(
             })
         })
         .collect::<Result<Vec<Sbom>, SyftBuildpackError>>()?;
+    sboms.push(Sbom {
+        format: SbomFormat::SyftJson,
+        data: fs::read(&syft_sbom).map_err(SyftBuildpackError::Io)?,
+    });
 
     layer_ref.write_sboms(&sboms)?;
 
