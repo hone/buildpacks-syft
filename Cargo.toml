@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 flate2 = "1.1.4"
 libcnb = "0.30.0"
+libherokubuildpack = { version = "0.30.2", default-features = false, features = ["inventory", "inventory-semver", "inventory-sha2"] }
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "rustls-tls"] }
+semver = { version = "1.0.27", features = ["serde"] }
 serde = "1.0.228"
+sha2 = "0.10.9"
 tar = "0.4.44"
 tempfile = "3.23.0"
 thiserror = "2.0.17"
