@@ -17,9 +17,9 @@ use std::{fs, io::Write, os::unix::fs::PermissionsExt};
 
 use crate::{SyftBuildpack, errors::SyftBuildpackError};
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub(crate) struct SyftLayerMetadata {
-    version: Version,
+    artifact: Artifact<Version, Sha256, Option<()>>,
 }
 
 pub(crate) fn handle(
@@ -34,7 +34,7 @@ pub(crate) fn handle(
             launch: false,
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
             restored_layer_action: &|metadata: &SyftLayerMetadata, _| {
-                if metadata.version == artifact.version {
+                if metadata.artifact == artifact {
                     RestoredLayerAction::KeepLayer
                 } else {
                     RestoredLayerAction::DeleteLayer
@@ -118,7 +118,7 @@ fn download_syft(
     }
 
     layer_ref.write_metadata(SyftLayerMetadata {
-        version: artifact.version.clone(),
+        artifact: artifact.clone(),
     })?;
 
     Ok(())
