@@ -1,0 +1,13 @@
+[[artifacts]]
+version = "1.38.0"
+os = "linux"
+arch = "amd64"
+url = "https://github.com/anchore/syft/releases/download/v1.38.0/syft_1.38.0_linux_amd64.sbom"
+checksum = "sha256:0c4d1f51daa9c435c68defbc6d9fbabb34641a10efbb77d19de614d08466dbd9"
+
+[[artifacts]]
+version = "1.38.0"
+os = "linux"
+arch = "arm64"
+url = "https://github.com/anchore/syft/releases/download/v1.38.0/syft_1.38.0_linux_arm64.sbom"
+checksum = "sha256:e86888ea133270c192154143949376e53c63d496ac009b53d80cec17136bbec0"
